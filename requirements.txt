@@ -1,0 +1,13 @@
+langchain
+langchain-chroma
+chromadb
+langchain-google-genai
+langchain-text-splitters
+langchain-community
+feedparser
+requests
+beautifulsoup4
+tqdm
+openai
+typing-extensions
+lxml

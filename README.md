@@ -1,0 +1,40 @@
+Your Friendly Agentic AI for MSMEs: Govt Schemes, Loans & GST Info at Your Fingertips
+Hey there, MSME owners and entrepreneurs! Struggling to keep track of govt schemes like MUDRA, Startup India Seed Fund, or CGTMSE? Wondering about the latest GST rates or how to navigate GST rules? Don’t worry — this AI assistant has got your back.
+
+It’s like having a super-smart business buddy who:
+
+Finds the latest updates on your favorite MSME government schemes.
+
+Pulls real-time GST rates right from trusted sources.
+
+Shares the freshest news about these programs.
+
+Breaks down GST requirements in simple words you can actually understand.
+
+Creates easy-to-read tables and clear summaries.
+
+(If you use the VS Code version) even makes cool charts and graphs to help you visualize data.
+
+Why Two Versions?
+Since deploying this full AI was tricky, here’s the scoop:
+
+The VS Code version does everything — including making pretty charts.
+
+The Langflow version works great for info, summaries, and tables but is still catching up on charts.
+
+How to Use
+If you want to try the Langflow AI version, just hop onto the Langflow URL I shared.
+
+Type in your query about MSME schemes, loans, or GST.
+
+You’ll get quick answers, summaries, and tables that help you make decisions faster.
+
+Please use it lightly — it’s running on a free API key, so lots of heavy usage might slow things down.
+
+Want your own AI version or curious about how the knowledge base is built? Shoot me an email:
+tapis.samaiya.cd.eee23@itbhu.ac.in
+
+Why You’ll Love This AI
+No more digging through complex government websites. No more confusion over GST jargon. Just accurate, easy-to-understand info — whenever you need it!
+
+Got questions? Reach out anytime! This AI is here to make business smoother and smarter for you.

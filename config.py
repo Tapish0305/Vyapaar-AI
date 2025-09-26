@@ -1,0 +1,1 @@
+model_name = "Qwen/Qwen3-Next-80B-A3B-Thinking"

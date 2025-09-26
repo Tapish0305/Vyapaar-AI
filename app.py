@@ -1,3 +1,4 @@
+## RUN THIS  COMMENTED CODE WHEN YOU ADD MORE FILES. 
 # import streamlit as st
 # from langchain.document_loaders import PyPDFDirectoryLoader
 # from Database import get_chroma_vector_store
@@ -88,7 +89,7 @@
 
 # st.info("Ask anything related to GST, MSME loans, or government schemes.")
 
-# == Add download, context display, or advanced context visualization if needed ==
+# Add download, context display, or advanced context visualization if needed
 
 import streamlit as st
 from langchain_community.vectorstores import Chroma

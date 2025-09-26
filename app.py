@@ -10,12 +10,12 @@ from prompt_template import PromptTemplate
 from website_crawl import crawl_urls
 from chart_maker import chart_maker  # Your chart maker function
 from tool_chooser import choose_tool  # Your tool chooser function
-
+from config import model_name
 # === Configuration ===
 PERSIST_DIRECTORY = r'C:\GEN_AI_IBM_competition\vs_code_db'
 GST_DATA_URL = 'https://cleartax.in/s/gst-rates'
 LOAN_INFO_URL = 'https://www.india.gov.in/pradhan-mantri-mudra-yojna'
-MODEL_NAME = 'Qwen/Qwen3-Next-80B-A3B-Thinking'
+MODEL_NAME = model_name
 
 # Use Streamlit's cache for resource-intensive operations
 @st.cache_resource

@@ -9,7 +9,7 @@ It’s like having a super-smart business buddy who:
 - 📰 Shares the freshest news about these programs.
 - 📚 Breaks down GST requirements in simple words you can actually understand.
 - 📊 Creates easy-to-read tables and clear summaries.
-- 🎨 (If you use the VS Code version) even makes cool charts and graphs to help you visualize data.
+- 🎨 (If you use the Streamlit version) even makes cool charts and graphs to help you visualize data.
 
 ---
 

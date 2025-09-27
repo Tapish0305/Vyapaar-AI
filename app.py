@@ -8,9 +8,10 @@ from gst import scrape_gst_rates
 from model import hf_chat
 from prompt_template import PromptTemplate
 from website_crawl import crawl_urls
-from chart_maker import chart_maker  # Your chart maker function
-from tool_chooser import choose_tool  # Your tool chooser function
+from chart_maker import chart_maker
+from tool_chooser import choose_tool
 from config import model_name
+
 # === Configuration ===
 PERSIST_DIRECTORY = r'C:\GEN_AI_IBM_competition\vs_code_db'
 GST_DATA_URL = 'https://cleartax.in/s/gst-rates'
@@ -20,86 +21,80 @@ MODEL_NAME = model_name
 # Use Streamlit's cache for resource-intensive operations
 @st.cache_resource
 def load_retriever():
-    """
-    Loads the retriever from the persisted Chroma database.
-    This function is cached so it only runs once per session.
-    """
     embedding_func = get_embedding_function()
-    db = Chroma(
-        persist_directory=PERSIST_DIRECTORY,
-        embedding_function=embedding_func
-    )
-    retriever = db.as_retriever(search_kwargs={"k": 5})  # Retrieve top 5 relevant chunks
+    db = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embedding_func)
+    retriever = db.as_retriever(search_kwargs={"k": 5})
     return retriever
 
 def display_chart(response):
-    if "error" not in response:
-        data = response.get("data")
-        is_empty = False
-        if data is None:
-            is_empty = True
-        elif isinstance(data, pd.Series):
-            is_empty = data.empty
-        elif isinstance(data, dict):
-            is_empty = not bool(data)
-        if is_empty:
-            st.warning("The AI could not find any data to plot for this query.")
-            return
-        chart_type = response.get("chart_type")
-        fig, ax = plt.subplots()
-        if chart_type == "bar":
-            df = pd.DataFrame.from_dict(data, orient='index', columns=['value'])
-            df.plot(kind='bar', ax=ax, legend=False)
-            plt.xticks(rotation=45, ha="right")
-        elif chart_type == "pie":
-            ax.pie(data.values(), labels=data.keys(), autopct='%1.1f%%', startangle=90)
-            ax.axis('equal')
-        elif chart_type == "line":
-            pd.Series(data).plot(kind='line', ax=ax, legend=False)
-            plt.axhline(0, color='grey', linewidth=0.8)
-        ax.set_title(response.get("title", "Chart"))
-        ax.set_xlabel(response.get("x_label", ""))
-        ax.set_ylabel(response.get("y_label", ""))
-        plt.tight_layout()
-        st.pyplot(fig)
-    else:
+    if "error" in response:
         st.error(response.get("error"))
+        return
+
+    data = response.get("data")
+    if data is None or (isinstance(data, (pd.Series, dict)) and not data):
+        st.warning("The AI could not find any data to plot for this query.")
+        return
+
+    chart_type = response.get("chart_type")
+    fig, ax = plt.subplots()
+
+    if chart_type == "bar":
+        df = pd.DataFrame.from_dict(data, orient='index', columns=['value'])
+        df.plot(kind='bar', ax=ax, legend=False)
+        plt.xticks(rotation=45, ha="right")
+    elif chart_type == "pie":
+        ax.pie(data.values(), labels=data.keys(), autopct='%1.1f%%', startangle=90)
+        ax.axis('equal')
+    elif chart_type == "line":
+        pd.Series(data).plot(kind='line', ax=ax, legend=False)
+        plt.axhline(0, color='grey', linewidth=0.8)
+
+    ax.set_title(response.get("title", "Chart"))
+    ax.set_xlabel(response.get("x_label", ""))
+    ax.set_ylabel(response.get("y_label", ""))
+    plt.tight_layout()
+    st.pyplot(fig)
 
 # === Main Streamlit Interface ===
+st.title("Vyapaar AI: Smart MSME Support 🚀")
+st.info("Ask anything about GST, MSME loans, or ask for data visualizations!")
 
-st.title("Vyapaar AI for: Smart MSME Support")
-st.info("Ask anything related to GST, MSME loans, or government schemes.")
+retriever = load_retriever()
 
-retriever = load_retriever()  # Cached retriever loading
-
-user_query = st.text_input("Ask your question about MSME loans, GST, etc.")
+user_query = st.text_input("Ask your question (e.g., 'What is Mudra loan?' or 'Show me a chart of GST rates')")
 
 if st.button("Get Answer") and user_query.strip():
-    with st.spinner("Determining the best tool for your query..."):
-        # You can replace {} with actual loaded conversation profile if available
-        conversation_profile = {}
+    # Define the tools available to the AI
+    tools = [
+        {"name": "chart_maker", "description": "Use this tool when the user explicitly asks to create a chart, plot, graph, or any kind of data visualization."},
+        {"name": "text_generator", "description": "Use this tool to provide detailed textual answers, explanations, or summaries based on a knowledge base and web search."}
+    ]
 
-        tools = [
-            {"name": "chart_maker", "description": "Analyze data and create MSME business charts."},
-            {"name": "text_summary", "description": "Provide concise text answer."}
-            # Add other tools here if needed
-        ]
-
-        chosen_tool = choose_tool(user_query, tools, conversation_profile)
-
-    if chosen_tool == "chart_maker":
-        # Retrieve documents to provide context for chart maker
+    with st.spinner("Thinking... 🤔"):
+        # 1. Choose which tool(s) to use. This now returns a list.
+        chosen_tools = choose_tool(user_query, tools)
+        
+        # 2. Retrieve context from the database ONCE.
         retrieved_docs = retriever.get_relevant_documents(user_query)
-        # Prepare context string if your chart_maker requires it (optional)
-        # Since your chart_maker currently only takes query, we just call it
-        chart_response = chart_maker(user_query)
-        display_chart(chart_response)
+        context_from_db = "\n\n".join(doc.page_content for doc in retrieved_docs)
 
-    else:  # fallback to text answer for other cases
-        with st.spinner("Fetching relevant documents and generating answer..."):
-            retrieved_docs = retriever.get_relevant_documents(user_query)
-            context_from_db = "\n\n".join(doc.page_content for doc in retrieved_docs)
+    # 3. Execute the chosen tools.
+    if not chosen_tools:
+        st.warning("I'm not sure how to answer that. Please try rephrasing your question.")
 
+    # --- Execute Chart Maker if chosen ---
+    if "chart_maker" in chosen_tools:
+        with st.spinner("Creating your chart... 📊"):
+            # Pass the retrieved documents as context to the chart maker
+            chart_response = chart_maker(user_query, retrieved_docs)
+            st.markdown("### Visualization")
+            display_chart(chart_response)
+
+    # --- Execute Text Generator if chosen ---
+    if "text_generator" in chosen_tools:
+        with st.spinner("Crafting your answer... ✍️"):
+            # This part is your original text-generation logic
             news = search_google_news(user_query)
             gst_data = scrape_gst_rates(GST_DATA_URL)
             loan_data = crawl_urls(LOAN_INFO_URL)
@@ -107,10 +102,11 @@ if st.button("Get Answer") and user_query.strip():
             template = """
             You are an expert AI assistant named "MSME-Sahayak".
             Your task is to provide a clear, practical, and step-by-step answer to the user's question based strictly on the provided context.
-            Also in answer please do not mention about the context provided. Just provide the answer.
-            If it is not in the context then generate your best response based on your knowledge.
-            ## Context from Knowledge Base (PDFs).
-            After you gave the answer then provide the sources you used.
+            Do not mention the context in your answer. Just provide the answer.
+            If the information is not in the context, use your general knowledge.
+            After the answer, provide the sources you used.
+            
+            ## Context from Knowledge Base (PDFs)
             {context}
             ---
             ## Latest News Search Results
@@ -138,15 +134,12 @@ if st.button("Get Answer") and user_query.strip():
             answer = hf_chat(MODEL_NAME, prompt)
 
             st.markdown("---")
-            st.markdown("### Answer")
+            st.markdown("### Detailed Answer")
             st.write(answer)
 
-    # Optionally show context or source documents
+    # --- Optional Expander to show context ---
     with st.expander("Show Retrieved Context from Knowledge Base"):
-        if 'context_from_db' in locals():
-            st.info(context_from_db)
-        else:
-            st.info("No context available.")
+        st.info(context_from_db if context_from_db else "No context was retrieved from the knowledge base.")
 
 # import streamlit as st
 # from langchain.document_loaders import PyPDFDirectoryLoader

@@ -11,3 +11,4 @@ tqdm
 openai
 typing-extensions
 lxml
+transformers

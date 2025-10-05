@@ -2,32 +2,75 @@ import requests
 from bs4 import BeautifulSoup
 from typing import List, Dict
 
-def scrape_gst_rates(url: str) -> List[Dict[str, str]]:
+def scrape_gst_rates(url: str)  -> List[Dict[str, Union[str, List]]]:
     """
-    Scrape GST rates from a table on the given URL.
+    Scrapes all paragraphs and tables from a given URL and returns them
+    in a structured list, all within a single function.
+
     Args:
-        url (str): URL of the page containing GST rate table.
+        url (str): The URL of the page to scrape.
+
     Returns:
-        List[Dict[str, str]]: List of GST rate records with category, items, and rate.
+        A list where each item is a dictionary representing a piece of
+        content (either a paragraph or a table).
+        Returns an empty list if the page cannot be fetched or contains no content.
     """
-    response = requests.get(url)
-    response.raise_for_status()
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Check for request errors (like 404, 500)
+    except requests.exceptions.RequestException as e:
+        # If the request fails, return an informative error.
+        print(f"Error fetching URL {url}: {e}")
+        return [{"error": f"Failed to fetch URL: {e}"}]
+
     soup = BeautifulSoup(response.text, "html.parser")
-    table = soup.find("table", class_="ck-table-resized")
-    if not table:
-        print("No table with class ck-table-resized found.")
+    
+    # Find all paragraph and table tags in the order they appear.
+    content_elements = soup.body.find_all(['p', 'table'])
+
+    if not content_elements:
         return []
-    rows = table.find_all("tr")
-    data = []
-    for row in rows[1:]:  # skip header row
-        cols = row.find_all(["td", "th"])
-        if len(cols) >= 3:
-            category = cols[0].get_text(strip=True)
-            items = cols[1].get_text(strip=True)
-            from_percent = cols[2].get_text(strip=True)
-            data.append({
-                "category": category,
-                "items": items,
-                "from_percent": from_percent
-            })
-    return data
+
+    scraped_data = []
+    for element in content_elements:
+        if element.name == 'p':
+            # --- Handle Paragraph Content ---
+            text = element.get_text(strip=True)
+            if text:  # Only add non-empty paragraphs.
+                scraped_data.append({
+                    "type": "paragraph",
+                    "content": text
+                })
+        
+        elif element.name == 'table':
+            # --- Handle Table Content (Inlined Logic) ---
+            table_data = []
+            headers_tags = element.find_all('th')
+            header_row = element.find('tr')
+            
+            headers = []
+            body_rows = []
+
+            if headers_tags:
+                headers = [h.get_text(strip=True) for h in headers_tags]
+                # If <th> exists, data rows are in <tbody> or are all <tr> after the first one.
+                body_rows = element.find('tbody').find_all('tr') if element.find('tbody') else element.find_all('tr')[1:]
+            elif header_row:
+                # If no <th>, use the first row's <td>s as headers.
+                headers = [cell.get_text(strip=True) for cell in header_row.find_all('td')]
+                body_rows = element.find_all('tr')[1:] # All other rows are data.
+            
+            # Process the data rows into a list of dictionaries.
+            for row in body_rows:
+                cols = row.find_all('td')
+                if len(cols) == len(headers): # Ensure row aligns with header.
+                    row_data = {headers[i]: col.get_text(strip=True) for i, col in enumerate(cols)}
+                    table_data.append(row_data)
+
+            if table_data: # Only add non-empty tables.
+                scraped_data.append({
+                    "type": "table",
+                    "content": table_data
+                })
+                
+    return scraped_data

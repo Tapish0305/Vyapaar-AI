@@ -2,7 +2,7 @@ from model import hf_chat
 from config import model_name
 import re
 def chart_maker(query: str, retrieved_docs: str):
-    prompt = f"""
+    prompt = f""" 
         You are an expert analyst specializing in MSME (Micro, Small, and Medium Enterprises) 
         business insights. Your task is to perform a detailed analysis of the entire provided
         transcript based on the user's query related to MSME issues such as GST rates, 

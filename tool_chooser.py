@@ -26,13 +26,8 @@ def choose_tool(user_query: str, tools: list) -> list:
     """
 
     try:
-        # Call your LLM to get the list of tools
         response = hf_chat(model_name, prompt)
-        
-        # Safely parse the string representation of the list
-        # The model might return "['chart_maker']" as a string
-        tool_list = ast.literal_eval(response.strip())
-
+        tool_list = ast.literal_eval(response.strip()) ## ast.literal_eval convert '[..]' into [..]
         if isinstance(tool_list, list):
             return tool_list
         else:
@@ -40,7 +35,7 @@ def choose_tool(user_query: str, tools: list) -> list:
             
     except (ValueError, SyntaxError):
         # If the LLM returns a malformed list or just plain text, handle it gracefully
-        # For a simple fallback, check for keywords
+
         if "chart" in user_query.lower() or "plot" in user_query.lower():
              return ['chart_maker', 'text_generator'] # Default to both for chart queries
         return ['text_generator'] # Default to text for everything else

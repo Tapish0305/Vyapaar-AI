@@ -11,7 +11,7 @@ from website_crawl import crawl_urls
 from chart_maker import chart_maker
 from tool_chooser import choose_tool
 from config import model_name
-
+from database_builder import build_and_persist_db
 # === Configuration ===
 PERSIST_DIRECTORY = r'C:\GEN_AI_IBM_competition\vs_code_db'
 GST_DATA_URL = 'https://cleartax.in/s/gst-rates'
@@ -21,8 +21,10 @@ MODEL_NAME = model_name
 # Use Streamlit's cache for resource-intensive operations
 @st.cache_resource
 def load_retriever():
-    embedding_func = get_embedding_function()
-    db = Chroma(persist_directory=PERSIST_DIRECTORY, embedding_function=embedding_func)
+    db = build_and_persist_db()
+    if db is None:
+        st.error("Vector database could not be initialized. Check console for errors.")
+        return None
     retriever = db.as_retriever(search_kwargs={"k": 5})
     return retriever
 
@@ -76,7 +78,7 @@ if st.button("Get Answer") and user_query.strip():
         chosen_tools = choose_tool(user_query, tools)
         
         # 2. Retrieve context from the database ONCE.
-        retrieved_docs = retriever.get_relevant_documents(user_query)
+        retrieved_docs = retriever.invoke(user_query)
         context_from_db = "\n\n".join(doc.page_content for doc in retrieved_docs)
 
     # 3. Execute the chosen tools.
@@ -94,17 +96,17 @@ if st.button("Get Answer") and user_query.strip():
     # --- Execute Text Generator if chosen ---
     if "text_generator" in chosen_tools:
         with st.spinner("Crafting your answer... ✍️"):
-            # This part is your original text-generation logic
             news = search_google_news(user_query)
             gst_data = scrape_gst_rates(GST_DATA_URL)
             loan_data = crawl_urls(LOAN_INFO_URL)
 
             template = """
             You are an expert AI assistant named "MSME-Sahayak".
-            Your task is to provide a clear, practical, and step-by-step answer to the user's question based strictly on the provided context.
+            Your task is to provide a clear, practical, and step-by-step answer to the user's question based 
+            strictly on the provided context.
             Do not mention the context in your answer. Just provide the answer.
             If the information is not in the context, use your general knowledge.
-            After the answer, provide the sources you used.
+            After the answer, provide the tol-free number and websie for more information to user.
             
             ## Context from Knowledge Base (PDFs)
             {context}

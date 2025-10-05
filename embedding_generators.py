@@ -45,8 +45,8 @@ def get_embedding_function():
 
     # We return the whole object, so LangChain can use it internally.
     # The model 'models/text-embedding-004' is the default and recommended one.
-    embeddings = GoogleGenerativeAIEmbeddings(
+    embeddings_function = GoogleGenerativeAIEmbeddings(
         model="models/text-embedding-004",
         google_api_key=api_key
     )
-    return embeddings
+    return embeddings_function

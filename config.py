@@ -1,1 +1,1 @@
-model_name = "Qwen/Qwen3-Next-80B-A3B-Thinking"
+model_name = "microsoft/Phi-3-mini-128k-instruct"

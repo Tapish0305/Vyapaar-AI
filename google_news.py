@@ -1,7 +1,9 @@
 import feedparser
 from urllib.parse import quote_plus
 from typing import List, Optional
+from smolagents import tool
 
+@tool
 def search_google_news(
     query: str,
     hl: str = "en-US",
@@ -58,3 +60,4 @@ def search_google_news(
             "summary": summary
         })
     return articles
+    

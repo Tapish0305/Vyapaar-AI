@@ -12,3 +12,4 @@ openai
 typing-extensions
 lxml
 transformers
+crewai-tools

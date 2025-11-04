@@ -1,32 +1,33 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import pandas as pd
+import os
+# Correct imports from smolagents
+from smolagents import tool
+from smolagents import CodeAgent
+from smolagents import InferenceClientModel
 from langchain_community.vectorstores import Chroma
 from embedding_generators import get_embedding_function
-from google_news import search_google_news
-from gst import scrape_gst_rates
-from model import hf_chat
-from prompt_template import PromptTemplate
-from website_crawl import crawl_urls
-from chart_maker import chart_maker
-from tool_chooser import choose_tool
-from config import model_name
 from database_builder import build_and_persist_db
-# === Configuration ===
-PERSIST_DIRECTORY = r'C:\GEN_AI_IBM_competition\vs_code_db'
+from config import model_name
+from google_news import search_google_news
+from gst import scrape_gst_rates_tool
+from chart_maker import chart_maker
+from mudra_website_search import loan_info_tool
+from dotenv import load_dotenv
+load_dotenv()  # This loads the variables from .env into environment
+
 GST_DATA_URL = 'https://cleartax.in/s/gst-rates'
 LOAN_INFO_URL = 'https://www.india.gov.in/pradhan-mantri-mudra-yojna'
-MODEL_NAME = model_name
 
-# Use Streamlit's cache for resource-intensive operations
 @st.cache_resource
 def load_retriever():
-    db = build_and_persist_db()
+    db = build_and_persist_db(uploaded_files=None)
     if db is None:
         st.error("Vector database could not be initialized. Check console for errors.")
         return None
-    retriever = db.as_retriever(search_kwargs={"k": 5})
-    return retriever
+    return db.as_retriever(search_kwargs={"k": 5})
+
 
 def display_chart(response):
     if "error" in response:
@@ -58,285 +59,136 @@ def display_chart(response):
     plt.tight_layout()
     st.pyplot(fig)
 
-# === Main Streamlit Interface ===
+
+# Wrap all tool functions using @tool decorator
+
+@tool
+def search_knowledge_base(query: str) -> str:
+    """
+    Searches the knowledge base with the given query.
+
+    Args:
+        query (str): The search query string to send to the knowledge base.
+
+    Returns:
+        str: A single string containing all retrieved documents, separated by newlines,
+             or an error message if the search fails.
+    """
+    try:
+        retrieved_docs = retriever.invoke(query)
+        return "\n\n".join(doc.page_content for doc in retrieved_docs)
+    except Exception as e:
+        return f"Error: Could not search knowledge base. {e}"
+
+@tool
+def chart_maker_wrapper(query: str) -> dict:
+    """
+    Retrieves documents for a query and then uses them to generate a chart JSON.
+
+    Args:
+        query (str): The user query to retrieve documents for and generate the chart.
+
+    Returns:
+        dict: A chart JSON specification or a dictionary containing an error message.
+    """
+    try:
+        retrieved_docs_list = retriever.invoke(query)
+        retrieved_docs_str = "\n\n".join(doc.page_content for doc in retrieved_docs_list)
+        chart_json = chart_maker(query=query, retrieved_docs=retrieved_docs_str)
+        return chart_json
+    except Exception as e:
+        return {"type": "chart", "error": f"Failed to run chart wrapper: {e}"}
+
+# Load retriever once globally
+retriever = load_retriever()
+
+# Instantiate the model using the specified model_id
+# model_id = "deepseek-ai/DeepSeek-OCR"
+# inference_model = InferenceClientModel(model_id=model_id)
+
+# Create the CodeAgent with tools and add_base_tools=True
+agent = CodeAgent(
+    model=InferenceClientModel(),
+    tools=[
+        search_knowledge_base,
+        chart_maker_wrapper,
+        search_google_news,
+        scrape_gst_rates_tool,
+        loan_info_tool,
+    ],
+    add_base_tools=True,
+)
+
+
+# Streamlit UI setup
 st.title("Vyapaar AI: Smart MSME Support 🚀")
 st.info("Ask anything about GST, MSME loans, or ask for data visualizations!")
 
-retriever = load_retriever()
+with st.sidebar:
+    # st.header("🔑 API Configuration")
+
+    # # Show input boxes for each API key
+    # hf_token_input = st.text_input("HuggingFace Token (HF_TOKEN)", type="password")
+    # google_api_input = st.text_input("Google API Key (GOOGLE_API_KEY)", type="password",
+    #                                 )
+    # openrouter_api_input = st.text_input("OpenRouter API Key (OPENROUTER_API_KEY)", type="password",
+    #                                      )
+
+    # # Save button
+    # if st.button("💾 Save API Keys"):
+    #     os.environ["HF_TOKEN"] = hf_token_input.strip()
+    #     os.environ["GOOGLE_API_KEY"] = google_api_input.strip()
+    #     os.environ["OPENROUTER_API_KEY"] = openrouter_api_input.strip()
+
+    #     # Also store in session for persistent Streamlit use
+    #     st.session_state["HF_TOKEN"] = hf_token_input.strip()
+    #     st.session_state["GOOGLE_API_KEY"] = google_api_input.strip()
+    #     st.session_state["OPENROUTER_API_KEY"] = openrouter_api_input.strip()
+
+    #     st.success("✅ API keys saved successfully!")
+    #     st.rerun()  # Refresh app to apply
+
+    st.header("Admin: Update Knowledge Base")
+    uploaded_files = st.file_uploader(
+        "Upload new PDF documents",
+        type=["pdf"],
+        accept_multiple_files=True,
+    )
+    if st.button("Add to Knowledge Base"):
+        if uploaded_files:
+            with st.spinner("Processing documents and updating database..."):
+                build_and_persist_db(uploaded_files=uploaded_files)
+                st.cache_resource.clear()
+            st.success("Database updated successfully! The app will reload.")
+            st.experimental_rerun()
+        else:
+            st.warning("Please upload at least one PDF file.")
 
 user_query = st.text_input("Ask your question (e.g., 'What is Mudra loan?' or 'Show me a chart of GST rates')")
 
 if st.button("Get Answer") and user_query.strip():
-    # Define the tools available to the AI
-    tools = [
-        {"name": "chart_maker", "description": "Use this tool when the user explicitly asks to create a chart, plot, graph, or any kind of data visualization."},
-        {"name": "text_generator", "description": "Use this tool to provide detailed textual answers, explanations, or summaries based on a knowledge base and web search."}
-    ]
+    if not retriever:
+        st.error("Retriever not loaded. Check vector DB connection.")
+    else:
+        with st.spinner("Thinking... 🤔"):
+            try:
+                answer = agent.run(user_query)
 
-    with st.spinner("Thinking... 🤔"):
-        # 1. Choose which tool(s) to use. This now returns a list.
-        chosen_tools = choose_tool(user_query, tools)
-        
-        # 2. Retrieve context from the database ONCE.
-        retrieved_docs = retriever.invoke(user_query)
-        context_from_db = "\n\n".join(doc.page_content for doc in retrieved_docs)
+                st.markdown("---")
+                st.markdown("### Detailed Answer")
+                if isinstance(answer, dict):
+                    # Convert dict to a clean string
+                    formatted_answer = "\n\n".join(
+                        f"**{k}:** {v.strip()}" for k, v in answer.items()
+                    )
+                    st.markdown(formatted_answer)
+                else:
+                    st.write(answer)
 
-    # 3. Execute the chosen tools.
-    if not chosen_tools:
-        st.warning("I'm not sure how to answer that. Please try rephrasing your question.")
 
-    # --- Execute Chart Maker if chosen ---
-    if "chart_maker" in chosen_tools:
-        with st.spinner("Creating your chart... 📊"):
-            # Pass the retrieved documents as context to the chart maker
-            chart_response = chart_maker(user_query, retrieved_docs)
-            st.markdown("### Visualization")
-            display_chart(chart_response)
+                if isinstance(answer, dict) and answer.get("type") == "chart":
+                    display_chart(answer)
 
-    # --- Execute Text Generator if chosen ---
-    if "text_generator" in chosen_tools:
-        with st.spinner("Crafting your answer... ✍️"):
-            news = search_google_news(user_query)
-            gst_data = scrape_gst_rates(GST_DATA_URL)
-            loan_data = crawl_urls(LOAN_INFO_URL)
-
-            template = """
-            You are an expert AI assistant named "MSME-Sahayak".
-            Your task is to provide a clear, practical, and step-by-step answer to the user's question based 
-            strictly on the provided context.
-            Do not mention the context in your answer. Just provide the answer.
-            If the information is not in the context, use your general knowledge.
-            After the answer, provide the tol-free number and websie for more information to user.
-            
-            ## Context from Knowledge Base (PDFs)
-            {context}
-            ---
-            ## Latest News Search Results
-            {web_search}
-            ---
-            ## Website Data for Loans
-            {loan_url_data}
-            ---
-            ## Website Data for GST
-            {gst_url_data}
-            ---
-            ## User's Question
-            {question}
-            ---
-            ## Final Answer
-            """
-            prompt_template = PromptTemplate(template)
-            prompt = prompt_template.build_prompt(
-                context=context_from_db,
-                web_search=news,
-                loan_url_data=loan_data,
-                gst_url_data=gst_data,
-                question=user_query
-            )
-            answer = hf_chat(MODEL_NAME, prompt)
-
-            st.markdown("---")
-            st.markdown("### Detailed Answer")
-            st.write(answer)
-
-    # --- Optional Expander to show context ---
-    with st.expander("Show Retrieved Context from Knowledge Base"):
-        st.info(context_from_db if context_from_db else "No context was retrieved from the knowledge base.")
-
-# import streamlit as st
-# from langchain.document_loaders import PyPDFDirectoryLoader
-# from Database import get_chroma_vector_store
-# from embedding_generators import get_google_embeddings
-# from google_news import search_google_news
-# from gst import scrape_gst_rates
-# from model import hf_chat
-# from prompt_template import PromptTemplate
-# from text_splitter import split_text_into_chunks
-# from website_crawl import crawl_urls
-# import feedparser
-# from urllib.parse import quote_plus
-# from typing import List, Optional
-# import os
-# # Import your splitter, embedding, DB, scraper, and template construction functions here
-
-# # === Configuration ===
-# PDF_DIR = 'C:\GEN_AI_IBM_competition\OTHER_STUFF'
-# COLLECTION_NAME = 'langflow'
-# PERSIST_DIRECTORY = r'C:\GEN_AI_IBM_competition\vs_code_db'
-# GST_DATA_URL = 'https://cleartax.in/s/gst-rates'
-# LOAN_INFO_URL = 'https://www.india.gov.in/pradhan-mantri-mudra-yojna'
-# MODEL_NAME = 'Qwen/Qwen3-Next-80B-A3B-Thinking'
-
-# # === Streamlit Interface ===
-# st.title("MSME-Sahayak: Smart MSME Support")
-
-# # User input
-# user_query = st.text_input("Ask your question about MSME loans, GST, etc.")
-
-# if st.button("Get Answer") and user_query.strip():
-#     # 1. Load PDFs and split into chunks
-#     with st.spinner("Loading documents..."):
-#         loader = PyPDFDirectoryLoader(PDF_DIR, recursive=False)
-#         all_documents = loader.load()
-#         # Combine pages to a single string (update if you want multi-doc handling)
-#         full_text = "\n".join([doc.page_content for doc in all_documents])
-#         chunks = split_text_into_chunks(full_text, chunk_size=1000, chunk_overlap=200, separator="\n")
-
-#     # 2. Get embeddings and store in vector DB
-#     with st.spinner("Indexing knowledge base..."):
-#         embeddings = get_google_embeddings(chunks)
-#         database = get_chroma_vector_store(COLLECTION_NAME, embeddings, PERSIST_DIRECTORY)
-
-#     # 3. News & Web scraping
-#     with st.spinner("Fetching latest info..."):
-#         news = search_google_news(user_query)
-#         url_data = scrape_gst_rates(GST_DATA_URL)
-#         website_crawl = crawl_urls(LOAN_INFO_URL)
-
-#     # 4. Prepare prompt from template
-#     template = """
-#     You are an expert AI assistant named "MSME-Sahayak".
-#     ## Context from Knowledge Base
-#     {context}
-#     ---
-#     ## web search
-#     {web}
-#     ---
-#     ## Website_url for loan
-#     {Website_url}
-#     ## Website url for gst
-#     {gst_url}
-#     ---
-#     ---
-#     ## User's Question
-#     {question}
-#     ---
-#     ## Your Task
-#     Based strictly on the provided context, provide a clear, practical, and step-by-step answer to the user's question.
-#     """
-#     prompt_template = PromptTemplate(template)
-#     prompt = prompt_template.build_prompt(
-#         context=database,
-#         web=news,
-#         Website_url=website_crawl,
-#         gst_url=url_data,
-#         question=user_query
-#     )
-
-#     # 5. Call the LLM (Qwen/Qwen3-Next-80B-A3B-Thinking)
-#     with st.spinner("Generating smart answer..."):
-#         answer = hf_chat(MODEL_NAME, prompt)
-
-#     # 6. Display result
-#     st.markdown("## Answer")
-#     st.write(answer)
-
-# st.info("Ask anything related to GST, MSME loans, or government schemes.")
-
-# == Add download, context display, or advanced context visualization if needed ==
-
-# import streamlit as st
-# from langchain_community.vectorstores import Chroma
-# from embedding_generators import get_embedding_function
-# from google_news import search_google_news
-# from gst import scrape_gst_rates
-# from model import hf_chat
-# from prompt_template import PromptTemplate
-# from website_crawl import crawl_urls
-# from langchain.schema.runnable import RunnablePassthrough
-# from langchain.schema import StrOutputParser
-
-# # === Configuration ===
-# PERSIST_DIRECTORY = r'C:\GEN_AI_IBM_competition\vs_code_db'
-# GST_DATA_URL = 'https://cleartax.in/s/gst-rates'
-# LOAN_INFO_URL = 'https://www.india.gov.in/pradhan-mantri-mudra-yojna'
-# MODEL_NAME = 'Qwen/Qwen3-Next-80B-A3B-Thinking'
-
-# # Use Streamlit's cache for resource-intensive operations
-# @st.cache_resource
-# def load_retriever():
-#     """
-#     Loads the retriever from the persisted Chroma database.
-#     This function is cached so it only runs once per session.
-#     """
-#     print("Loading Chroma DB retriever...")
-#     embedding_func = get_embedding_function()
-#     db = Chroma(
-#         persist_directory=PERSIST_DIRECTORY,
-#         embedding_function=embedding_func
-#     )
-#     # The retriever is the interface for searching documents.
-#     retriever = db.as_retriever(search_kwargs={"k": 5}) # Retrieve top 5 relevant chunks
-#     print("Retriever loaded successfully.")
-#     return retriever
-
-# def format_docs(docs):
-#     """Helper function to format retrieved documents into a string."""
-#     return "\n\n".join(doc.page_content for doc in docs)
-
-# # === Streamlit Interface ===
-# st.title("Vyapaar AI for: Smart MSME Support")
-# st.info("Ask anything related to GST, MSME loans, or government schemes.")
-
-# # Load the retriever once and cache it
-# retriever = load_retriever()
-
-# # User input
-# user_query = st.text_input("Ask your question about MSME loans, GST, etc.")
-
-# if st.button("Get Answer") and user_query.strip():
-#     with st.spinner("Searching knowledge base and fetching latest info..."):
-#         # 1. Retrieve relevant context from your static PDF knowledge base (This is now very fast)
-#         retrieved_docs = retriever.get_relevant_documents(user_query)
-#         context_from_db = format_docs(retrieved_docs)
-
-#         # 2. Fetch dynamic, real-time info from the web
-#         news = search_google_news(user_query)
-#         gst_data = scrape_gst_rates(GST_DATA_URL)
-#         loan_data = crawl_urls(LOAN_INFO_URL)
-
-#     # 3. Prepare prompt from template
-#     template = """
-#     You are an expert AI assistant named "MSME-Sahayak".
-#     Your task is to provide a clear, practical, and step-by-step answer to the user's question based strictly on the provided context.
-#     Also in answer please do not mention about the context provided. Just provide the answer.
-#     If it is not in the context then generate your best response based on your knowledge.
-#     ## Context from Knowledge Base (PDFs).
-#     After you gave the answer then provide the sources you used.
-#     {context}
-#     ---
-#     ## Latest News Search Results
-#     {web_search}
-#     ---
-#     ## Website Data for Loans
-#     {loan_url_data}
-#     ---
-#     ## Website Data for GST
-#     {gst_url_data}
-#     ---
-#     ## User's Question
-#     {question}
-#     ---
-#     ## Final Answer
-#     """
-#     prompt_template = PromptTemplate(template)
-#     prompt = prompt_template.build_prompt(
-#         context=context_from_db,
-#         web_search=news,
-#         loan_url_data=loan_data,
-#         gst_url_data=gst_data,
-#         question=user_query
-#     )
-
-#     # 4. Call the LLM
-#     with st.spinner("Generating smart answer..."):
-#         answer = hf_chat(MODEL_NAME, prompt)
-
-#     # 5. Display result
-#     st.markdown("---")
-#     st.markdown("### Answer")
-#     st.write(answer)
-
-#     # (Optional) Display the sources from your database
-#     with st.expander("Show Retrieved Context from Knowledge Base"):
-#         st.info(context_from_db)
+            except Exception as e:
+                st.error("An error occurred while running the agent.")
+                st.error(f"Error: {str(e)}")

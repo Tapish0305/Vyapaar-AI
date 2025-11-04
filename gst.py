@@ -1,76 +1,104 @@
+from smolagents import tool
 import requests
 from bs4 import BeautifulSoup
-from typing import List, Dict
+from typing import List, Dict, Union
+import json  # Added this import
 
-def scrape_gst_rates(url: str)  -> List[Dict[str, Union[str, List]]]:
+# Defined the URL that will be used by the function
+url = 'https://cleartax.in/s/gst-rates'
+
+@tool
+def scrape_gst_rates_tool(query: str) -> List[Dict[str, Union[str, List]]]:
     """
-    Scrapes all paragraphs and tables from a given URL and returns them
-    in a structured list, all within a single function.
+    Searches the fixed Cleartax GST rates page (https://cleartax.in/s/gst-rates)
+    for paragraphs or tables matching a specific product or category query.
+    Use this to find the GST rate for a specific item (e.g., 'shoes', 'milk', 'laptops').
 
     Args:
-        url (str): The URL of the page to scrape.
+        query (str): The specific product or category to search for (e.g., 'shoes', 'milk', 'laptops').
 
     Returns:
-        A list where each item is a dictionary representing a piece of
-        content (either a paragraph or a table).
-        Returns an empty list if the page cannot be fetched or contains no content.
+        List[Dict[str, Union[str, List]]]: A list of dictionaries. Each dictionary 
+        represents a matching paragraph or table. Returns a list with a single 
+        error or info dictionary if no query is given, the page fails to load, 
+        or no matches are found.
     """
+    
+    if not query:
+        return [{"error": "A search query must be provided."}]
+
     try:
-        response = requests.get(url)
-        response.raise_for_status()  # Check for request errors (like 404, 500)
+        # (Fixed) Changed GST_DATA_URL to the defined 'url'
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        # If the request fails, return an informative error.
-        print(f"Error fetching URL {url}: {e}")
-        return [{"error": f"Failed to fetch URL: {e}"}]
+        return [{"error": f"Failed to fetch GST data: {e}"}]
 
     soup = BeautifulSoup(response.text, "html.parser")
-    
-    # Find all paragraph and table tags in the order they appear.
-    content_elements = soup.body.find_all(['p', 'table'])
+    # Robustly find all 'p' and 'table' tags even if <body> is missing
+    content_elements = (soup.body or soup).find_all(['p', 'table'])
 
     if not content_elements:
-        return []
+        return [{"info": "No paragraphs or tables found on the GST page."}]
 
+    # --- 1. Scrape ALL data first ---
     scraped_data = []
     for element in content_elements:
         if element.name == 'p':
-            # --- Handle Paragraph Content ---
             text = element.get_text(strip=True)
-            if text:  # Only add non-empty paragraphs.
+            if text:
                 scraped_data.append({
                     "type": "paragraph",
                     "content": text
                 })
-        
+
         elif element.name == 'table':
-            # --- Handle Table Content (Inlined Logic) ---
             table_data = []
             headers_tags = element.find_all('th')
-            header_row = element.find('tr')
-            
+            header_row = element.find('tr') # Fallback for tables with <td> headers
             headers = []
             body_rows = []
 
             if headers_tags:
+                # Standard case: Table has <th> tags
                 headers = [h.get_text(strip=True) for h in headers_tags]
-                # If <th> exists, data rows are in <tbody> or are all <tr> after the first one.
                 body_rows = element.find('tbody').find_all('tr') if element.find('tbody') else element.find_all('tr')[1:]
             elif header_row:
-                # If no <th>, use the first row's <td>s as headers.
+                # Fallback: No <th>, use first <tr> as header
                 headers = [cell.get_text(strip=True) for cell in header_row.find_all('td')]
-                body_rows = element.find_all('tr')[1:] # All other rows are data.
-            
-            # Process the data rows into a list of dictionaries.
+                body_rows = element.find_all('tr')[1:]
+
+            # Process table rows
             for row in body_rows:
                 cols = row.find_all('td')
-                if len(cols) == len(headers): # Ensure row aligns with header.
+                if len(cols) == len(headers) and any(col.get_text(strip=True) for col in cols):
                     row_data = {headers[i]: col.get_text(strip=True) for i, col in enumerate(cols)}
                     table_data.append(row_data)
 
-            if table_data: # Only add non-empty tables.
+            if table_data:
                 scraped_data.append({
                     "type": "table",
-                    "content": table_data
+                    "content": table_data # content is a List[Dict]
                 })
-                
-    return scraped_data
+
+    # --- 2. Filter the scraped data based on the query ---
+    filtered_data = []
+    lower_query = query.lower()
+
+    for item in scraped_data:
+        if item["type"] == "paragraph":
+            # If the query is in the paragraph text
+            if lower_query in item["content"].lower():
+                filtered_data.append(item)
+        
+        elif item["type"] == "table":
+            # If query is in the table (check by converting table to string)
+            # (Fixed) 'json' is now imported
+            table_as_string = json.dumps(item["content"]).lower()
+            if lower_query in table_as_string:
+                filtered_data.append(item)
+
+    if not filtered_data:
+        return [{"info": f"No paragraphs or tables found matching your query: '{query}'"}]
+
+    return filtered_data

@@ -28,9 +28,9 @@ Since deploying this full AI was tricky, here’s the scoop:
 2. Run it using 'run playground' option and Type in your query about MSME schemes, loans, or GST.
 3. If you want to run via vs-code or pycharm just upload these files and run using streamlit.
 4. Note: you must have your own .env file which contain api keys in this format - 
-      a. HF_TOKEN = 'hf_************'
-      b. GOOGLE_API_KEY = 'AIzaSyD****************'
-      c. TAVILY_API_KEY = "tvly-dev********"
+      1. HF_TOKEN = 'hf_************'
+      2. GOOGLE_API_KEY = 'AIzaSyD****************'
+      3. TAVILY_API_KEY = "tvly-dev********"
 5. You’ll get quick answers, summaries, charts and tables that help you make decisions faster.
 6. Want your own AI version or curious about how the knowledge base is built? Shoot me an email:  
    [tapis.samaiya.cd.eee23@itbhu.ac.in](mailto:tapis.samaiya.cd.eee23@itbhu.ac.in)

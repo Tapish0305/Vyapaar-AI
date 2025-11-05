@@ -2,7 +2,6 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
-# Correct imports from smolagents
 from smolagents import tool
 from smolagents import CodeAgent
 from smolagents import InferenceClientModel

@@ -68,9 +68,8 @@ cd Vyapaar-AI
 ### 2. Create Virtual Environment (Recommended)
 
 ```bash
-python -m venv venv
-source venv/bin/activate    # Linux / Mac
-venv\Scripts\activate       # Windows
+conda create -n py39 python=3.9.0
+conda activate py39
 ```
 
 ---
@@ -92,16 +91,13 @@ Create a `.env` file in the root directory:
 ```env
 GOOGLE_API_KEY=your_google_generative_ai_key
 TAVILY_API_KEY=your_tavily_api_key
+HF_TOKEN= your_hf_token
 ```
-
-> ⚠️ Ensure `.env` is added to `.gitignore`.
-
----
 
 ## ▶️ Run the Application
 
 ```bash
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
 
 Open your browser and interact with the chatbot via the Streamlit interface.
@@ -120,15 +116,6 @@ Open your browser and interact with the chatbot via the Streamlit interface.
 * MSME owners seeking guidance on loans and GST
 * Students and researchers exploring Indian financial schemes
 * Automated helpdesk for government policy queries
-
----
-
-## 🛣️ Future Enhancements
-
-* Persistent chat history
-* Source citation in responses
-* Multilingual support (English & Hindi)
-* Role-based responses (Business Owner, Student, Accountant)
 
 ---
 

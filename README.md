@@ -1,4 +1,4 @@
-# Vyapaar-AI 🏢🤖
+# Vyapaar-AI 🏢
 
 ### MSME & GST Question Answering Assistant
 

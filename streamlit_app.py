@@ -31,7 +31,7 @@ if prompt := st.chat_input("Ask about Udyam registration, GST rates, etc."):
     with st.chat_message("user"):
         st.markdown(prompt)
     with st.chat_message("assistant"):
-        with st.spinner("Wait sir!"):
+        with st.spinner(""):
             try:
                 initial_state = {"messages": [HumanMessage(content=prompt)]}
                 response = chatbot.invoke(initial_state)

@@ -1,4 +1,4 @@
-![Python](https://img.shields.io/badge/python-3.9%2B-blue)
+![Python](https://img.shields.io/badge/python-3.9.0-blue)
 ![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-green)
 ![Streamlit](https://img.shields.io/badge/Streamlit-UI-orange)
 ![License](https://img.shields.io/badge/License-MIT-yellow)

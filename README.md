@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 <h1 align="center">Vyapaar-AI 🏢</h1>
-<h3 align="center">MSME & GST Question Answering Assistant</h3>
+<h3 align="center">A MSME & GST Question Answering Assistant</h3>
 
 **Vyapaar-AI** is an AI-powered question-answering assistant designed to help users with queries related to **MUDRA loans, UDYAM registration, MSME schemes, and GST in India**.
 
